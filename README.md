@@ -1,5 +1,5 @@
 # coordinate
-Typescript coordinate class for handling coordinate input and output
+Typescript coordinate class for handling coordinate input and output. If you improve it, please create pull request.
 
 # Usage
 Liberally accepts different coordinate types
