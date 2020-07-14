@@ -1,8 +1,5 @@
+import { roundAndTruncate } from '../lib/lib';
 import mgrs from 'mgrs';
-
-export function roundAndTruncate(number: number, maxFractionDigits: number) {
-  return parseFloat(number.toFixed(maxFractionDigits)).toString();
-}
 
 export type CoordinateFormat = 'D.D' | 'D M.M' | 'D M S.S' | 'MGRS';
 
@@ -22,13 +19,14 @@ export class Coordinate {
   constructor(latOrString: number | string, longitude?: number) {
     // If passed a lat and lng as a number, create a new coordinate. It sets
     // the detected to Not Detected. Detected is for user input strings.
-    if (typeof latOrString !== 'string' && longitude) {
+    if (typeof latOrString !== 'string' && typeof longitude === 'number') {
       this.latitude = latOrString;
       this.longitude = longitude;
       this.detected = 'Not Detected';
       return;
     }
-    if (typeof latOrString !== 'string') throw new Error('Pass a string or (latitude, longitude)');
+    if (typeof latOrString !== 'string')
+      throw new Error(`Pass a string or (latitude, longitude), passed ${latOrString}`);
     const coordinate = latOrString;
 
     // Check if the coordinate is MGRS, of so, handle it.
@@ -60,10 +58,10 @@ export class Coordinate {
     // wanting perfectly formatted coordinates. It searches for W or E in the string and
     // looks at the number of digits grouped together.
     const containsWest = coordinate.match(/[wW]+/) ? true : false;
-    const containesSouth = coordinate.match(/[eE]+/) ? true : false;
+    const containesSouth = coordinate.match(/[sS]+/) ? true : false;
     const parts = coordinate.match(/-?[0-9.]+/g);
     if (!parts) throw new Error('Not valid coordinates');
-    const numbers = parts.map(part => parseFloat(part));
+    const numbers = parts.map((part) => parseFloat(part));
 
     // The user must be passing in D.D with only two sets of numbers
     if (numbers.length === 2) {
@@ -94,6 +92,9 @@ export class Coordinate {
     } else {
       throw new Error('Not valid coordinates');
     }
+
+    if (this.latitude > 90 || this.latitude < -90 || this.longitude > 180 || this.longitude < -180)
+      throw new Error('Not valid coordinates');
   }
 
   // Helpful if the format the user wants is stored in the preferences
@@ -107,7 +108,7 @@ export class Coordinate {
         return this.degreesMinutesSecondsDecimalSeconds;
       case 'MGRS':
         let string = mgrs.forward([this.longitude, this.latitude]);
-        string = string.slice(0, 3) + ' ' + string.slice(3, 5) + ' ' + string.slice(5);
+        string = string.slice(0, 3) + ' ' + string.slice(3, 5) + ' ' + string.slice(5, 10) + ' ' + string.slice(10);
         return string;
     }
   }
@@ -127,9 +128,9 @@ export class Coordinate {
   // Returns N 34 50.2 W 116 32.4
   get degreesMinutesDecimalMinutes() {
     const latDegFloor = Math.floor(Math.abs(this.latitude));
-    const latMin = this.latitude === 0 ? 0 : (Math.abs(this.latitude) % latDegFloor) * 60;
+    const latMin = latDegFloor === 0 ? this.latitude * 60 : (Math.abs(this.latitude) % latDegFloor) * 60;
     const lngDegFloor = Math.floor(Math.abs(this.longitude));
-    const lngMin = this.longitude === 0 ? 0 : (Math.abs(this.longitude) % lngDegFloor) * 60;
+    const lngMin = lngDegFloor === 0 ? this.longitude * 60 : (Math.abs(this.longitude) % lngDegFloor) * 60;
     let latHemisphere = 'N';
     let lngHemisphere = 'E';
     if (this.latitude < 0) {
@@ -139,22 +140,22 @@ export class Coordinate {
       lngHemisphere = 'W';
     }
     return (
-      `${latHemisphere} ${latDegFloor} ${roundAndTruncate(latMin, 4)} ` +
-      `${lngHemisphere} ${lngDegFloor} ${roundAndTruncate(lngMin, 4)}`
+      `${latHemisphere} ${latDegFloor} ${roundAndTruncate(latMin, 4, 2)} ` +
+      `${lngHemisphere} ${lngDegFloor} ${roundAndTruncate(lngMin, 4, 2)}`
     );
   }
 
   // Returns N 39 50 24.23 W 115 34 23.9
   get degreesMinutesSecondsDecimalSeconds() {
     const latDegFloor = Math.floor(Math.abs(this.latitude));
-    const latMin = this.latitude === 0 ? 0 : (Math.abs(this.latitude) % latDegFloor) * 60;
+    const latMin = latDegFloor === 0 ? this.latitude * 60 : (Math.abs(this.latitude) % latDegFloor) * 60;
     const latMinFloor = Math.floor(latMin);
-    const latSec = latMin === 0 ? 0 : (latMin % latMinFloor) * 60;
+    const latSec = latMinFloor === 0 ? latMinFloor * 60 : (latMin % latMinFloor) * 60;
 
     const lngDegFloor = Math.floor(Math.abs(this.longitude));
-    const lngMin = this.longitude === 0 ? 0 : (Math.abs(this.longitude) % lngDegFloor) * 60;
+    const lngMin = lngDegFloor === 0 ? this.longitude * 60 : (Math.abs(this.longitude) % lngDegFloor) * 60;
     const lngMinFloor = Math.floor(lngMin);
-    const lngSec = lngMin === 0 ? 0 : (lngMin % lngMinFloor) * 60;
+    const lngSec = lngMinFloor === 0 ? lngMinFloor * 60 : (lngMin % lngMinFloor) * 60;
     let latHemisphere = 'N';
     let lngHemisphere = 'E';
     if (this.latitude < 0) {
@@ -164,8 +165,10 @@ export class Coordinate {
       lngHemisphere = 'W';
     }
     return (
-      `${latHemisphere} ${latDegFloor} ${latMinFloor} ${roundAndTruncate(latSec, 2)} ` +
-      `${lngHemisphere} ${lngDegFloor} ${latMinFloor} ${roundAndTruncate(lngSec, 2)}`
+      `${latHemisphere} ${latDegFloor} ${roundAndTruncate(latMinFloor, 2, 2)} ${roundAndTruncate(latSec, 2, 2)} ` +
+      `${lngHemisphere} ${lngDegFloor} ${roundAndTruncate(lngMinFloor, 2, 2)} ${roundAndTruncate(lngSec, 2, 2)}`
     );
   }
 }
+
+export default Coordinate;
